@@ -1,0 +1,17 @@
+name: events
+version: 1.4.0
+owner: platform-team
+schema:
+  - name: event_id
+    type: string
+    nullable: false
+  - name: event_type
+    type: string
+    nullable: false
+  - name: payload
+    type: json
+    nullable: true
+  - name: emitted_at
+    type: timestamp
+    nullable: false
+breaking_change_policy: warn

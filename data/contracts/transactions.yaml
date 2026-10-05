@@ -1,0 +1,26 @@
+name: transactions
+version: 3.0.1
+owner: payments-team
+schema:
+  - name: txn_id
+    type: string
+    nullable: false
+  - name: customer_id
+    type: string
+    nullable: false
+  - name: amount
+    type: decimal(18,2)
+    nullable: false
+  - name: currency
+    type: string
+    nullable: false
+  - name: card_last4
+    type: string
+    nullable: true
+    classification: CONFIDENTIAL
+constraints:
+  primary_key: [txn_id]
+  foreign_keys:
+    - column: customer_id
+      references: customers.customer_id
+breaking_change_policy: fail

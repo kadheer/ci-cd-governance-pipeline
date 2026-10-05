@@ -1,0 +1,15 @@
+version: 1
+classification:
+  - level: RESTRICTED
+    fields: [ssn, passport_number, credit_card, cvv]
+    rules: [never_log, never_export, mask_in_ui]
+  - level: CONFIDENTIAL
+    fields: [email, phone, address, date_of_birth]
+    rules: [encrypt_at_rest, mask_in_logs]
+  - level: INTERNAL
+    fields: [customer_id, account_id]
+    rules: [audit_access]
+
+enforcement:
+  block_pr_on_violation: true
+  require_owner_approval: true

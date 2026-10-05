@@ -1,0 +1,21 @@
+# Application dependencies
+fastapi==0.115.0
+uvicorn==0.32.0
+pydantic==2.9.2
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
+requests==2.32.3
+
+# Data & governance tooling (used by pipeline gate)
+lakelogic==1.0.0
+pyyaml==6.0.2
+jsonschema==4.23.0
+pandas==2.2.3
+
+# Testing
+pytest==8.3.3
+pytest-cov==6.0.0
+
+# Linting (optional but useful)
+ruff==0.7.1

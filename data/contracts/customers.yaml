@@ -1,0 +1,27 @@
+name: customers
+version: 2.1.0
+owner: data-platform-team
+description: Customer master records
+schema:
+  - name: customer_id
+    type: string
+    nullable: false
+    classification: INTERNAL
+  - name: email
+    type: string
+    nullable: false
+    classification: CONFIDENTIAL
+  - name: ssn
+    type: string
+    nullable: true
+    classification: RESTRICTED
+  - name: created_at
+    type: timestamp
+    nullable: false
+constraints:
+  primary_key: [customer_id]
+  unique: [email]
+lineage:
+  upstream: [signup_service]
+  downstream: [analytics_customers, marketing_segments]
+breaking_change_policy: fail

@@ -1,0 +1,149 @@
+name: CI/CD Governance Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write   # Required for SARIF upload
+  pull-requests: write     # Required for PR annotations
+
+jobs:
+  vulnerability-scan:
+    name: Trivy Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+          steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for scan
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: governance-app:scan
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        # ^ v0.35.0 — PINNED TO IMMUTABLE COMMIT SHA
+        with:
+          image-ref: 'governance-app:scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'          # FAILS the build on CRITICAL or HIGH
+          ignore-unfixed: true    # Skip CVEs with no available patch
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  static-analysis:
+    name: Static Code Analysis (Python/Java)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: [python, java]
+    steps:
+          steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended   # Broader vulnerability coverage
+
+      - name: Set up Python (conditional)
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Java (conditional)
+        if: matrix.language == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  data-governance:
+    name: Data Governance Validation
+    runs-on: ubuntu-latest
+    steps:
+          steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install governance validator
+        run: pip install lakelogic
+
+      - name: Validate data contracts (schema, PII, lineage)
+        run: |
+          lakelogic validate \
+            --gates breaking_change,pii_classification,lineage_break \
+            --contracts data/contracts/
+        # Exit code 1 blocks the pipeline on any violation
+
+      - name: Scan for hardcoded PII in source code
+        run: |
+          python - <<'EOF'
+          import re, pathlib, sys
+          violations = []
+          patterns = {
+              "email": r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+              "ssn":   r'\b\d{3}-\d{2}-\d{4}\b',
+              "credit_card": r'\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b',
+          }
+          for path in pathlib.Path("src").rglob("*.py"):
+              text = path.read_text()
+              for name, pattern in patterns.items():
+                  if re.search(pattern, text):
+                      violations.append(f"{path}: hardcoded {name}")
+          if violations:
+              print("PII violations found:")
+              for v in violations: print(f"  - {v}")
+              sys.exit(1)
+          print("No hardcoded PII detected.")
+          EOF
+
+  deploy:
+    name: Deploy (All Gates Passed)
+    needs: [vulnerability-scan, static-analysis, data-governance]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - run: echo "Deploying — all governance gates passed."
+        run: |
+            echo "## ✅ All Governance Gates Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Gate | Status |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| Trivy (CRITICAL/HIGH) | ✅ Pass |" >> $GITHUB_STEP_SUMMARY
+            echo "| CodeQL (Python + Java) | ✅ Pass |" >> $GITHUB_STEP_SUMMARY
+            echo "| Data Contracts & PII | ✅ Pass |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deploy to target environment
+        run: |
+          echo "Proceeding with deployment..."
+          # Add your deployment command here (e.g., helm upgrade, kubectl apply)
